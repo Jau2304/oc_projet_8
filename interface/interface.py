@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import shap
 import requests
 
-CSV_FILE_NAME = "../csv/preprocessed/app_test.csv"
+CSV_FILE_NAME = "data.csv"
+API_URL = "http://app:8000/api/"
 
 def display_prediction(prediction) :
     if prediction == 0 :
@@ -27,7 +28,7 @@ def main() :
 
     df = pd.read_csv(CSV_FILE_NAME)
 
-    with open("../selected_features.txt", "r") as file :
+    with open("selected_features.txt", "r") as file :
         lines = file.readlines()
 
     selected_features = [line.strip() for line in lines]
@@ -42,8 +43,8 @@ def main() :
 
     st.title("Demande d'emprunt")
     if st.button("Lancer la simulation") :
-        data = {"index": selected_index, "shap_max_display" : 10}
-        response = requests.post("http://127.0.0.1:5000/api/predict", json = data)
+        data = {"selected_index": selected_index, "shap_max_display" : 10}
+        response = requests.post(API_URL + "predict", json = data)
         data = response.json()
         display_prediction(data["prediction"])
         display_waterfall(data["top_features"], data["top_features_values"], data["top_shap_values"])

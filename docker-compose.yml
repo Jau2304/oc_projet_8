@@ -1,0 +1,31 @@
+services:
+  
+  interface:
+    build:
+      context: ./interface
+      dockerfile: dockerfile
+    ports:
+      - 8501:8501
+    depends_on:
+      - app
+    volumes:
+      - ./interface:/app
+    networks:
+      - app
+    container_name: interface_container
+
+  app:
+    build:
+      context: ./app
+      dockerfile: dockerfile
+    ports:
+      - 8000:8000
+    volumes:
+      - ./app:/app
+    networks:
+      - app
+    container_name: app_container
+
+networks:
+  app:
+    driver: bridge
