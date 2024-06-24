@@ -6,7 +6,8 @@ import shap
 import requests
 
 CSV_FILE_NAME = "data.csv"
-API_URL = "http://app:8000/api/"
+#API_URL = "http://app:8000/api/"
+API_URL = "http://localhost:5000/api/"
 
 def display_prediction(prediction) :
     if prediction == 0 :
@@ -25,13 +26,8 @@ def display_waterfall(features, features_values, shap_values) :
     st.pyplot(fig)
 
 def main() :
-
     df = pd.read_csv(CSV_FILE_NAME)
-
-    with open("selected_features.txt", "r") as file :
-        lines = file.readlines()
-
-    selected_features = [line.strip() for line in lines]
+    selected_features = list(df.columns)
     df = df[selected_features]
 
     st.title("Fichier client")
@@ -48,6 +44,7 @@ def main() :
         data = response.json()
         display_prediction(data["prediction"])
         display_waterfall(data["top_features"], data["top_features_values"], data["top_shap_values"])
+
 
 if __name__ == "__main__" :
     main()
