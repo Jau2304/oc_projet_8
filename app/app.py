@@ -3,15 +3,16 @@ import pandas as pd
 import numpy as np
 import pickle
 import shap
+import lightgbm as lgb
 
 CSV_FILE_NAME = "data.csv"
-CLASSIFIER_FILE_PATH = "../models/best_model.pkl"
-ACCEPTANCE_FILE_PATH = "../models/acceptance.txt"
+CLASSIFIER_FILE_NAME = "classifier.pkl"
+ACCEPTANCE = 0.5
 
 
-def load_data(csv_file_name, classifier_file_path) :
+def load_data(csv_file_name, classifier_file_name) :
     df = pd.read_csv(csv_file_name)
-    with open(classifier_file_path, "rb") as file :
+    with open(classifier_file_name, "rb") as file :
         classifier = pickle.load(file)
     explainer = shap.Explainer(classifier, df)
     return df, classifier, explainer
@@ -22,42 +23,49 @@ def read_request(data, df) :
     max_display = data["shap_max_display"]
     return row, max_display
 
-def get_shap_values(row, explainer, shap_max_display) :
+def get_shap_values(row, explainer, shap_max_display, output) :
     shap_values = explainer.shap_values(row)
-    top_features_indices = np.argsort(np.abs(shap_values[0]))[::-1][:shap_max_display]
-    top_features = row.columns[top_features_indices].tolist()
-    top_features_values = row.values[0][top_features_indices].tolist()
-    top_shap_values = shap_values[0][top_features_indices].tolist()
-    return {"top_features": top_features, "top_features_values": top_features_values, "top_shap_values": top_shap_values}
+    indices = np.argsort(np.abs(shap_values[0]))[::-1][:shap_max_display]
+    output["top_features"] = row.columns[indices].tolist()
+    output["top_features_values"] = row.values[0][indices].tolist()
+    output["top_shap_values"] = shap_values[0][indices].tolist()
 
-def get_acceptance(acceptance_file_path, model_file_path) :
-    with open(acceptance_file_path, "r") as file :
-        lines = file.readlines()
-    for line in lines :
-        content = line.split(" : ")
-        if content[0] == model_file_path :
-            return float(content[1])
-
-def get_prediction(row, classifier, acceptance) :
+def get_prediction(row, classifier, acceptance, output) :
     proba = classifier.predict_proba(row)[0, 1]
-    prediction = int(proba > acceptance)
-    return prediction
+    output["pred_proba"] = proba
+    output["acceptance"] = acceptance
+    output["pred_binary"] = int(proba > acceptance)
 
+def get_feature_importance(classifier, df) :
+    importances = classifier.feature_importances_
+    output = pd.DataFrame({"feature": df.columns, "importance": importances})
+    return output.sort_values(by = "importance", ascending = False)
 
 def create_app() :
 
-    df, classifier, explainer = load_data(CSV_FILE_NAME, CLASSIFIER_FILE_PATH)
+    df, classifier, explainer = load_data(CSV_FILE_NAME, CLASSIFIER_FILE_NAME)
     
     app = Flask(__name__)
 
     @app.route("/api/predict", methods = ["POST"])
     def predict() :
         row, shap_max_display = read_request(request.json, df)
-        output = get_shap_values(row, explainer, shap_max_display)
-        acceptance = get_acceptance(ACCEPTANCE_FILE_PATH, CLASSIFIER_FILE_PATH)
-        output["prediction"] = get_prediction(row, classifier, acceptance)
+        output = {}
+        get_shap_values(row, explainer, shap_max_display, output)
+        get_prediction(row, classifier, ACCEPTANCE, output)
         return jsonify(output)
     
+    @app.route("/api/importance", methods = ["POST"])
+    def importance() :
+        data = request.json
+        max_display = data.get("max_display")
+        feature_importances = get_feature_importance(classifier, df)
+        top_features = feature_importances.head(max_display)
+        return jsonify({
+            "features": top_features["feature"].tolist(),
+            "importances": top_features["importance"].tolist()
+        })
+
     return app
 
 
