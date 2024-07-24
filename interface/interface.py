@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import requests
 
 CSV_FILE_NAME = "data.csv"
-#API_URL = "http://localhost:5000/api/"
+#API_URL = "http://localhost:5000/api/" 
 API_URL = "http://app:8000/api/"
 
 FILTERS = ["(aucun filtre)", "ORGANIZATION_TYPE", "EMERGENCYSTATE_MODE",
@@ -40,6 +40,9 @@ def load_dataframe() :
     features = list(df.columns)
     df = df[features]
     st.title("Fichier client")
+    st.write("Le tableau ci-dessous affiche les données des clients.")
+    st.write(f"Il contient {df.shape[0]} lignes correspondant aux clients et \
+             {df.shape[1]} colonnes correspondant à leurs caractéristiques.")
     st.write(df)
     return df, features
 
@@ -53,8 +56,11 @@ def select_customer(df) :
         int : L'index du client sélectionné.
     """
     st.title("Sélection du client")
-    label = "Index du client :"
+    label = "Utilisez le sélecteur numérique ci-dessous pour \
+        choisir l'index d'un client, ce qui permettra d'afficher \
+        ses caractéristiques dans un tableau :"
     customer = st.number_input(label, min_value = 0, max_value = len(df) - 1)
+    st.write(f"Tableau des caractéristiques du client à l'index {customer} :")
     st.write(df.iloc[customer])
     return customer
 
@@ -70,9 +76,11 @@ def apply_filter(df, customer, key) :
         pd.DataFrame : Le dataframe filtré.
         str : La chaîne ajoutée au titre en fonction du filtre appliqué.
     """
-    prefix = st.selectbox("Sélectionnez un filtre :", FILTERS, key = key)
+    label = "Utilisez la liste déroulante ci-dessous pour choisir une \
+        catégorie suivant laquelle filtrer les données à afficher :"
+    prefix = st.selectbox(label, FILTERS, key = key)
     if prefix == "(aucun filtre)" :
-        return df, ""
+        return df, None
     features = []
     customer_feature = None
     for feature in df.columns :
@@ -80,18 +88,20 @@ def apply_filter(df, customer, key) :
             features.append(feature)
             if df.iloc[customer][feature] == 1 :
                 customer_feature = feature
-    label = "Sélectionnez la valeur du filtre "
+    label = "Utilisez la liste déroulante ci-dessous pour sélectionner \
+         la valeur du filtre "
     if customer_feature == None :
         label += ":"
         default = 0
     else :
-        label += f"(le client est dans la catégorie {customer_feature}) :"
+        label += "(le client sélectionné est dans la "
+        label += f"catégorie {customer_feature}) :"
         default = features.index(customer_feature)
     key += "value"
-    feature = st.selectbox(label, features, index = default, key = key)
-    return df[df[feature] == 1], f" (filtré avec {feature})"
+    filter_value = st.selectbox(label, features, index = default, key = key)
+    return df[df[filter_value] == 1], filter_value
 
-def display_feature(df, features, customer) :
+def display_feature(df, features, customer):
     """
     Affiche la distribution d'une variable sélectionnée dans un histogramme.
     Args :
@@ -100,19 +110,45 @@ def display_feature(df, features, customer) :
         customer (int) : L'index du client sélectionné.
     """
     st.title("Distribution des variables")
-    label = "Sélectionnez une variable pour afficher sa distribution :"
+    # Sélection de la variable
+    st.write("Sélectionnez une variable (caractéristique client) pour \
+             afficher sa distribution dans un histogramme.")
+    label = "Utilisez la liste déroulante ci-dessous pour sélectionner la \
+        caractéristique à afficher :"
     default = features.index("AMT_CREDIT")
     feature = st.selectbox(label, features, index = default)
-    highlight = st.checkbox("Afficher le le client sélectionné")
-    df_filter, title_suffix = apply_filter(df, customer, "univ")
+    # Affichage du client
+    st.write("")
+    label = "Cochez cette case pour mettre en évidence sur \
+        l'histogramme la valeur du client sélectionné."
+    highlight = st.checkbox(label)
+    # Application d'un filtre
+    st.write("")
+    df_filter, filter_value = apply_filter(df, customer, "univ")
+    # Affichage de l'histogramme
     if feature :
-        title = f"Distribution de {feature}" + title_suffix
+        title = f"Distribution de {feature}"
+        if filter_value != None :
+            title += f" (filtré avec {filter_value})"
         fig = px.histogram(df_filter, x = feature, title = title)
         fig.update_layout(bargap = 0.02)
         if highlight :
             value = df.iloc[customer][feature]
             fig.add_vline(x = value, line_width = 3, line_color = "red")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, use_container_width = True)
+        # Description pour les utilisateurs de lecteurs d'écran
+        label = "Cochez cette case pour afficher une description \
+        textuelle du graphique."
+        show_description = st.checkbox(label, key = "distribution")
+        if show_description :
+            st.write(f"L'histogramme ci-dessus montre la distribution de \
+                     la variable {feature}.")
+            if filter_value != None :
+                st.write(f"Seuls les clients de la catégorie \
+                         {filter_value} sont représentés.")
+            if highlight :
+                st.write(f"Une ligne rouge indique la valeur de la variable \
+                         pour le client sélectionné (index {customer}).")
 
 def compare_features(df, features, customer) :
     """
@@ -123,44 +159,92 @@ def compare_features(df, features, customer) :
         customer (int) : L'index du client sélectionné.
     """
     st.title("Comparaison des variables")
-    label_x = "Sélectionnez la variable en abscisse :"
+    st.write("Sélectionnez deux variables pour comparer leurs distributions \
+             à l'aide d'un graphique de dispersion.")
+    # Sélection de la variable en abscisse
+    label_x = "Utilisez la liste déroulante ci-dessous pour sélectionner \
+        la variable en abscisse :"
     default_x = features.index("AMT_CREDIT")
     feature_x = st.selectbox(label_x, features, index = default_x)
-    label_y = "Sélectionnez la variable en ordonnée :"
+    # Sélection de la variable en ordonnée
+    label_y = "Utilisez la liste déroulante ci-dessous pour sélectionner \
+        la variable en ordonnée :"
     default_y = features.index("AMT_ANNUITY")
     feature_y = st.selectbox(label_y, features, index = default_y)
-    highlight = st.checkbox("Afficher le le client sélectionné", key = "biv")
-    df_filter, title_suffix = apply_filter(df, customer, "biv_filter")
+    # Affichage du client
+    st.write("")
+    label = "Cochez cette case pour mettre en évidence sur \
+        le graphique la valeur du client sélectionné."
+    highlight = st.checkbox(label, key = "biv")
+    # Application d'un filtre
+    st.write("")
+    df_filter, filter_value = apply_filter(df, customer, "biv_filter")    
+    # Affichage du graphique de dispersion
     if feature_x and feature_y :
-        title = f"Comparaison de {feature_x} et {feature_y}" + title_suffix
+        title = f"Comparaison de {feature_x} et {feature_y}"
+        if filter_value != None :
+            title += f" (filtré avec {filter_value})"
         fig = px.scatter(df_filter, x = feature_x, y = feature_y, title = title)
         if highlight :
             value_x = df.iloc[customer][feature_x]
             value_y = df.iloc[customer][feature_y]
             fig.add_trace(go.Scatter(
                 x = [value_x], y = [value_y],
-                mode = "markers", name = "client", showlegend = False,
+                mode = "markers", name = "Client", showlegend = False,
                 marker = dict(color = "red", size = 15, symbol = "x")
             ))
         st.plotly_chart(fig)
+        # Description pour les utilisateurs de lecteurs d'écran
+        label = "Cochez cette case pour afficher une description \
+        textuelle du graphique."
+        show_description = st.checkbox(label, key = "comparison")
+        if show_description :
+            st.write(f"Le nuage de points ci-dessus montre la comparaison \
+                     entre les variables {feature_x} et {feature_y}.")
+            if filter_value != None :
+                st.write(f"Seuls les clients de la catégorie \
+                         {filter_value} sont représentés.")
+            if highlight :
+                st.write(f"Une croix rouge indique la position du client \
+                         sélectionné (index {customer}).")
 
 def display_feature_importance() :
     """
     Affiche l'importance globale des variables à partir d'une requête API.
     """
     st.title("Importance globale des variables")
-    label = "Nombre de variables à afficher :"
+    st.write("Affichez l'histogramme de l'importance globale des variables \
+             ayant le plus d'impact sur l'apprentissage du modèle.")
+    # Sélection du nombre de variables à afficher
+    label = "Utilisez le slider ci-dessous pour indiquer le nombre \
+        de variables à afficher dans l'histogramme (entre 5 et 15) :"
     max_display = st.slider(label, min_value = 5, max_value = 15, value = 10)
-    data = {"max_display" : max_display}
+    # Requête à l'API pour obtenir l'importance des features
+    data = {"max_display": max_display}
     response = requests.post(API_URL + "importance", json = data)
     data = response.json()
     content = {"Variable": data["features"], "Importance": data["importances"]}
     df_importance = pd.DataFrame(content)
-    fig = px.bar(df_importance, x="Importance", y="Variable",
+    # Affichage du graphique
+    fig = px.bar(df_importance, x = "Importance", y = "Variable",
                  title = "Importance globale des variables", orientation = "h")
     fig.update_layout(xaxis_title = "Importance",
                       yaxis_categoryorder = "total ascending")
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width = True)
+    # Description pour les utilisateurs de lecteurs d'écran
+    # Description textuelle pour les utilisateurs de lecteurs d'écran
+    label = "Cochez cette case pour afficher une description \
+        textuelle du graphique."
+    show_description = st.checkbox(label, key = "importance")
+    if show_description :
+        st.write(f"L'histogramme ci-dessus montre l'importance des \
+                {max_display} variables ayant eu le plus d'impact \
+                sur l'apprentissage du modèle.")
+        st.write("Les variables sont affichées sur l'axe vertical et leur \
+                importance est représentée sur l'axe horizontal.")
+        st.write("Par ordre décroissant d'importance, ces variables sont :")
+        names = ", ".join(df_importance["Variable"])
+        st.write(names)
 
 def display_score(data) :
     """
@@ -169,6 +253,7 @@ def display_score(data) :
     Args :
         data (dict) : Données sur les prédictions et le seuil d'acceptation.
     """
+    # Affichage de la jauge
     if data["pred_binary"] == 0 :
         title = "La demande d'emprunt est acceptée"
     else :
@@ -187,14 +272,26 @@ def display_score(data) :
                                  title = {"text": title},
                                  gauge = gauge))
     st.plotly_chart(fig)
+    # Description textuelle pour les utilisateurs de lecteurs d'écrans
+    score = 1 - data["pred_proba"]
+    if score < data["acceptance"] :
+        comparison = "inférieur"
+        status = "refusée"
+    else :
+        comparison = "supérieur"
+        status = "acceptée"
+    st.write(f"Le client sélectionné a obtenu un score de {score:.2f} ce \
+             qui est {comparison} au seuil de {data['acceptance']:.2f} : \
+             sa demande d'emprunt est donc {status}.")
 
-def display_waterfall(data) :
+def display_waterfall(data):
     """
     Affiche un graphique en cascade des valeurs SHAP pour les variables
-    les plus importantes.
+    les plus importantes et fournit une description textuelle détaillée.
     Args :
         data (dict) : Données sur les variables et les valeurs SHAP.
     """
+    # Affichage du diagramme waterfall
     features = data["top_features"]
     shap_values = np.around(-np.array(data["top_shap_values"]), decimals = 3)
     fig = go.Figure()
@@ -202,10 +299,25 @@ def display_waterfall(data) :
     fig.add_trace(go.Bar(x = shap_values, y = features,
                          text = [f"{value:.3f}" for value in shap_values],
                          textposition = "inside", orientation = "h",
-                         marker = dict(color = colors)))
+                         marker = dict(color=colors)))
     fig.update_layout(title = "Importance locale des variables",
                       xaxis_title = "Valeur SHAP")
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width = True)
+    # Description textuelle pour les utilisateurs de lecteurs d'écran
+    label = "Cochez cette case pour afficher une description \
+        textuelle du graphique."
+    show_description = st.checkbox(label, key = "shap")
+    if show_description :
+        st.write("Le graphique en cascade ci-dessus montre les valeurs \
+                SHAP des 10 variables les plus importantes pour la \
+                prédiction du score du client sélectionné.")
+        st.write("Les valeurs positives en bleu contribuent à l'acceptation \
+                de la demande tandis que les valeurs négatives en rouge \
+                contribuent au refus de la demande.")
+        st.write("Voici les 10 variables les plus importantes et leurs \
+                valeurs SHAP correspondantes :")
+        for feature, value in zip(features, shap_values):
+            st.write(f"- {feature} : {value:.3f}")
 
 def predict_score(customer) :
     """
@@ -214,12 +326,11 @@ def predict_score(customer) :
         customer (int) : L'index du client sélectionné.
     """
     st.title("Demande d'emprunt")
-    if st.button("Lancer la simulation") :
-        data = {"selected_index": customer, "shap_max_display" : 10}
-        response = requests.post(API_URL + "predict", json = data)
-        data = response.json()
-        display_score(data)
-        display_waterfall(data)
+    data = {"selected_index": customer, "shap_max_display" : 10}
+    response = requests.post(API_URL + "predict", json = data)
+    data = response.json()
+    display_score(data)
+    display_waterfall(data)
 
 if __name__ == "__main__":
     main()
