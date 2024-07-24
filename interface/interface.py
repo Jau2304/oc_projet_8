@@ -16,6 +16,12 @@ FILTERS = ["(aucun filtre)", "ORGANIZATION_TYPE", "EMERGENCYSTATE_MODE",
            "FONDKAPREMONT_MODE", "WALLSMATERIAL_MODE", "EMERGENCYSTATE_MODE"]
 
 def main():
+    """
+    Fonction principale du script.
+    Charge le dataframe, sélectionne un client, affiche des caractéristiques, 
+    compare des variables avec possibilité de filtrer, affiche l'importance
+    des variables et prédit le score du client.
+    """
     df, features = load_dataframe()
     customer = select_customer(df)
     display_feature(df, features, customer)
@@ -24,6 +30,12 @@ def main():
     predict_score(customer)
 
 def load_dataframe() :
+    """
+    Charge les données depuis un fichier CSV et affiche le dataframe.
+    Returns :
+        pd.DataFrame : Le dataframe contenant les données.
+        list : La liste des noms des colonnes du dataframe.
+    """
     df = pd.read_csv(CSV_FILE_NAME)
     features = list(df.columns)
     df = df[features]
@@ -32,6 +44,14 @@ def load_dataframe() :
     return df, features
 
 def select_customer(df) :
+    """
+    Permet à l'utilisateur de sélectionner un client à partir d'un index
+    et affiche les informations du client sélectionné.
+    Args :
+        df (pd.DataFrame) : Le dataframe contenant les données des clients.
+    Returns :
+        int : L'index du client sélectionné.
+    """
     st.title("Sélection du client")
     label = "Index du client :"
     customer = st.number_input(label, min_value = 0, max_value = len(df) - 1)
@@ -39,6 +59,17 @@ def select_customer(df) :
     return customer
 
 def apply_filter(df, customer, key) :
+    """
+    Applique un filtre basé sur les caractéristiques sélectionnées
+    par l'utilisateur et retourne un dataframe filtré.
+    Args :
+        df (pd.DataFrame) : Le dataframe contenant les données des clients.
+        customer (int) : L'index du client sélectionné.
+        key (str) : La clé pour l'élément de filtre dans Streamlit.
+    Returns:
+        pd.DataFrame : Le dataframe filtré.
+        str : La chaîne ajoutée au titre en fonction du filtre appliqué.
+    """
     prefix = st.selectbox("Sélectionnez un filtre :", FILTERS, key = key)
     if prefix == "(aucun filtre)" :
         return df, ""
@@ -61,6 +92,13 @@ def apply_filter(df, customer, key) :
     return df[df[feature] == 1], f" (filtré avec {feature})"
 
 def display_feature(df, features, customer) :
+    """
+    Affiche la distribution d'une variable sélectionnée dans un histogramme.
+    Args :
+        df (pd.DataFrame) : Le dataframe contenant les données des clients.
+        features (list) : La liste des noms des colonnes du dataframe.
+        customer (int) : L'index du client sélectionné.
+    """
     st.title("Distribution des variables")
     label = "Sélectionnez une variable pour afficher sa distribution :"
     default = features.index("AMT_CREDIT")
@@ -77,6 +115,13 @@ def display_feature(df, features, customer) :
         st.plotly_chart(fig)
 
 def compare_features(df, features, customer) :
+    """
+    Compare deux variables sélectionnées avec un graphique de dispersion.
+    Args :
+        df (pd.DataFrame) : Le dataframe contenant les données des clients.
+        features (list) : La liste des noms des colonnes du dataframe.
+        customer (int) : L'index du client sélectionné.
+    """
     st.title("Comparaison des variables")
     label_x = "Sélectionnez la variable en abscisse :"
     default_x = features.index("AMT_CREDIT")
@@ -100,6 +145,9 @@ def compare_features(df, features, customer) :
         st.plotly_chart(fig)
 
 def display_feature_importance() :
+    """
+    Affiche l'importance globale des variables à partir d'une requête API.
+    """
     st.title("Importance globale des variables")
     label = "Nombre de variables à afficher :"
     max_display = st.slider(label, min_value = 5, max_value = 15, value = 10)
@@ -115,6 +163,12 @@ def display_feature_importance() :
     st.plotly_chart(fig)
 
 def display_score(data) :
+    """
+    Affiche le score prédit et le statut d'acceptation sous forme
+    d'un graphique de jauge.
+    Args :
+        data (dict) : Données sur les prédictions et le seuil d'acceptation.
+    """
     if data["pred_binary"] == 0 :
         title = "La demande d'emprunt est acceptée"
     else :
@@ -135,6 +189,12 @@ def display_score(data) :
     st.plotly_chart(fig)
 
 def display_waterfall(data) :
+    """
+    Affiche un graphique en cascade des valeurs SHAP pour les variables
+    les plus importantes.
+    Args :
+        data (dict) : Données sur les variables et les valeurs SHAP.
+    """
     features = data["top_features"]
     shap_values = np.around(-np.array(data["top_shap_values"]), decimals = 3)
     fig = go.Figure()
@@ -148,6 +208,11 @@ def display_waterfall(data) :
     st.plotly_chart(fig)
 
 def predict_score(customer) :
+    """
+    Effectue une prédiction de score d'emprunt et affiche les résultats.
+    Args :
+        customer (int) : L'index du client sélectionné.
+    """
     st.title("Demande d'emprunt")
     if st.button("Lancer la simulation") :
         data = {"selected_index": customer, "shap_max_display" : 10}
